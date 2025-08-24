@@ -1,0 +1,41 @@
+#!/bin/bash
+
+read -p "Enter the full domain URL (including https://): " domain
+
+if [[ ! $domain =~ ^https?:// ]]; then
+    echo "Error: Please include the scheme (http:// or https://) in the domain."
+    exit 1
+fi
+
+output_raw="crawled-urls-raw.txt"
+output_final="crawled-urls-filtered.txt"
+
+rm -f "$output_raw" "$output_final"
+
+# Define rml as function because alias is not guaranteed in scripts
+rml() {
+    grep -Evi '\.(jpg|jpeg|png|gif|bmp|svg|webp|ico|tiff|tif|jfif|pjpeg|pjp|avif|heif|heic|raw|arw|cr2|nrw|k25|jxl|exr|dds|ai|eps|psd|css|otf|ttf|eot|woff|woff2|swf)$'
+}
+
+run_tool () {
+    echo "[*] Running $1..."
+    # Run the full command passed as arguments, no shift here
+    echo "$domain" | "${@}" | anew -q "$output_raw" > /dev/null
+}
+
+run_tool waybackurls
+
+unalias gau 2>/dev/null || true
+run_tool gau --subs
+
+run_tool urlfinder -silent -all
+
+run_tool hakrawler -subs -d 5 -t 100
+
+run_tool katana -d 5 -jc -jsl -silent -kf -jc -tlsi -fx -ef woff,css,png,svg,jpg,woff2,jpeg,gif
+
+echo "[*] Applying filter (rml) to remove unwanted file extensions..."
+rml < "$output_raw" | sort -u > "$output_final"
+
+echo "Crawling complete!"
+echo "Unique URLs saved and filtered in: $output_final"
